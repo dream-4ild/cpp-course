@@ -251,14 +251,10 @@ std::ostream& operator<<(std::ostream& out, const String& str) {
 }
 
 std::istream& operator>>(std::istream& inp, String& str) {
-  /*String cnt_string(100000, '\0');
-  inp >> cnt_string.ptr;
-  cnt_string.sz = strlen(cnt_string.ptr);
-  cnt_string.cap = cnt_string.sz + 1;*/
   String cnt_string;
   char elem;
   elem = inp.get();
-  while (elem != ' ' && elem != '\n') {
+  while (elem != ' ' && elem != '\n' && !inp.eof()) {
     cnt_string.push_back(elem);
     elem = inp.get();
   }
