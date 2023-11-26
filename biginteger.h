@@ -174,6 +174,7 @@ class BigInteger {
           transfer =
               std::floor(static_cast<double>(cnt_num + transfer) / BASE_);
         }
+        
         RemoveLeadingZeros();
       } else {
         BigInteger cnt_bigint;
