@@ -1,6 +1,6 @@
 #include <algorithm>
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 class String {
  private:
@@ -8,7 +8,7 @@ class String {
   size_t sz_;
   size_t cap_;
 
-  String(size_t sz_): ptr_(new char[sz_ + 1]), sz_(sz_), cap_(sz_ + 1) {
+  String(size_t sz_) : ptr_(new char[sz_ + 1]), sz_(sz_), cap_(sz_ + 1) {
     ptr_[sz_] = '\0';
   }
 
@@ -23,17 +23,17 @@ class String {
   }
 
  public:
-  String(): String(static_cast<size_t>(0)) {}
+  String() : String(static_cast<size_t>(0)) {}
 
-  String(const char* other): String(strlen(other)) {
-    memcpy(ptr_, other, sz_); 
+  String(const char* other) : String(strlen(other)) {
+    memcpy(ptr_, other, sz_);
   }
 
-  String(size_t sz_, char value): String(sz_) {
+  String(size_t sz_, char value) : String(sz_) {
     memset(ptr_, value, sz_);
   }
 
-  String(const String& other): String(other.sz_) {
+  String(const String& other) : String(other.sz_) {
     memcpy(ptr_, other.ptr_, sz_);
   }
 
@@ -52,7 +52,7 @@ class String {
       cap_ = other.cap_;
       memcpy(ptr_, other.ptr_, sz_ + 1);
     }
-    
+
     return *this;
   }
 
@@ -91,7 +91,7 @@ class String {
   size_t capacity() const {
     return cap_ - 1;
   }
-  
+
   void push_back(char value) {
     if (sz_ == cap_ - 1) {
       realloc(2 * sz_ + 1);
@@ -100,7 +100,7 @@ class String {
     ptr_[sz_] = value;
     ptr_[++sz_] = '\0';
   }
-  
+
   void pop_back() {
     ptr_[--sz_] = '\0';
   }
@@ -108,7 +108,7 @@ class String {
   char& front() {
     return ptr_[0];
   }
-  
+
   const char& front() const {
     return ptr_[0];
   }
@@ -116,22 +116,24 @@ class String {
   char& back() {
     return ptr_[sz_ - 1];
   }
-  
+
   const char& back() const {
     return ptr_[sz_ - 1];
   }
 
   size_t find(const String& substr) const {
-    return std::distance(ptr_, std::search(ptr_, ptr_ + sz_, substr.ptr_, substr.ptr_ + substr.sz_));
+    return std::distance(ptr_, std::search(ptr_, ptr_ + sz_, substr.ptr_,
+                                           substr.ptr_ + substr.sz_));
   }
 
   size_t rfind(const String& substr) const {
-    return std::distance(ptr_, std::find_end(ptr_, ptr_ + sz_, substr.ptr_, substr.ptr_ + substr.sz_));
+    return std::distance(ptr_, std::find_end(ptr_, ptr_ + sz_, substr.ptr_,
+                                             substr.ptr_ + substr.sz_));
   }
 
   String substr(size_t start, size_t count) const {
     String cnt_string(std::min(count, sz_ - start));
-    
+
     memcpy(cnt_string.ptr_, ptr_ + start, cnt_string.sz_);
     cnt_string.ptr_[cnt_string.sz_] = '\0';
 
@@ -143,7 +145,7 @@ class String {
   }
 
   void clear() {
-    sz_ =0;
+    sz_ = 0;
     ptr_[0] = '\0';
   }
 
@@ -152,7 +154,7 @@ class String {
       realloc(sz_);
     }
   }
-  
+
   char* data() {
     return ptr_;
   }
@@ -182,7 +184,8 @@ bool operator<(const String& first_str, const String& second_str) {
   const char* first_ptr = first_str.data();
   const char* second_ptr = second_str.data();
 
-  for (size_t i = 0; i < std::min(first_str.size(), second_str.capacity() + 1); ++i) {
+  for (size_t i = 0; i < std::min(first_str.size(), second_str.capacity() + 1);
+       ++i) {
     if (first_ptr[i] != second_ptr[i]) {
       return (first_ptr[i] < second_ptr[i]);
     }
@@ -233,7 +236,7 @@ std::istream& operator>>(std::istream& inp, String& str) {
   String cnt_string;
   char elem;
   elem = inp.get();
-  
+
   while (elem != ' ' && elem != '\n' && !inp.eof()) {
     cnt_string.push_back(elem);
     elem = inp.get();
