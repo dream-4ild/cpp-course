@@ -23,7 +23,7 @@ class String {
   }
 
  public:
-  String(): String(static_cast<size_t>(0)) {} // ??????
+  String(): String(static_cast<size_t>(0)) {}
 
   String(const char* other): String(strlen(other)) {
     memcpy(ptr_, other, sz_); 
@@ -60,7 +60,7 @@ class String {
     return ptr_[pos];
   }
 
-  const char& operator[](size_t pos) const{
+  const char& operator[](size_t pos) const {
     return ptr_[pos];
   }
 
@@ -80,15 +80,15 @@ class String {
     return *this;
   }
 
-  size_t length() const{
+  size_t length() const {
     return sz_;
   }
 
-  size_t size() const{
+  size_t size() const {
     return sz_;
   }
 
-  size_t capacity() const{
+  size_t capacity() const {
     return cap_ - 1;
   }
   
@@ -121,15 +121,15 @@ class String {
     return ptr_[sz_ - 1];
   }
 
-  size_t find(const String& substr) const{
+  size_t find(const String& substr) const {
     return std::distance(ptr_, std::search(ptr_, ptr_ + sz_, substr.ptr_, substr.ptr_ + substr.sz_));
   }
 
-  size_t rfind(const String& substr) const{
+  size_t rfind(const String& substr) const {
     return std::distance(ptr_, std::find_end(ptr_, ptr_ + sz_, substr.ptr_, substr.ptr_ + substr.sz_));
   }
 
-  String substr(size_t start, size_t count) const{
+  String substr(size_t start, size_t count) const {
     String cnt_string(std::min(count, sz_ - start));
 
     memcpy(cnt_string.ptr_, ptr_ + start, cnt_string.sz_);
@@ -138,12 +138,12 @@ class String {
     return cnt_string;
   }
 
-  bool empty() const{
+  bool empty() const {
     return (sz_ == 0);
   }
 
   void clear() {
-    sz_ = 0;
+    sz_ =0;
     ptr_[0] = '\0';
   }
 
@@ -167,8 +167,8 @@ bool operator==(const String& first_str, const String& second_str) {
     return false;
   }
 
-  auto first_ptr = first_str.data();
-  auto second_ptr = second_str.data();
+  const char* first_ptr = first_str.data();
+  const char* second_ptr = second_str.data();
 
   for (size_t i = 0; i < first_str.size(); ++i) {
     if (first_ptr[i] != second_ptr[i]) {
@@ -179,8 +179,8 @@ bool operator==(const String& first_str, const String& second_str) {
 }
 
 bool operator<(const String& first_str, const String& second_str) {
-  auto first_ptr = first_str.data();
-  auto second_ptr = second_str.data();
+  const char* first_ptr = first_str.data();
+  const char* second_ptr = second_str.data();
 
   for (size_t i = 0; i < std::min(first_str.size(), second_str.capacity() + 1); ++i) {
     if (first_ptr[i] != second_ptr[i]) {
@@ -195,7 +195,7 @@ bool operator!=(const String& first_str, const String& second_str) {
 }
 
 bool operator<=(const String& first_str, const String& second_str) {
-  return (first_str < second_str) || (first_str == second_str);
+  return !(second_str < first_str);
 }
 
 bool operator>(const String& first_str, const String& second_str) {
@@ -233,12 +233,12 @@ std::istream& operator>>(std::istream& inp, String& str) {
   String cnt_string;
   char elem;
   elem = inp.get();
-
+  
   while (elem != ' ' && elem != '\n' && !inp.eof()) {
     cnt_string.push_back(elem);
     elem = inp.get();
   }
-  
+
   str = cnt_string;
   return inp;
 }
