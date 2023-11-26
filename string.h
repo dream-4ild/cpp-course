@@ -131,7 +131,6 @@ class String {
 
   String substr(size_t start, size_t count) const {
     String cnt_string(std::min(count, sz_ - start));
-
     memcpy(cnt_string.ptr_, ptr_ + start, cnt_string.sz_);
     cnt_string.ptr_[cnt_string.sz_] = '\0';
 
