@@ -29,8 +29,12 @@ class BigInteger {
   BigInteger(int64_t value) {
     sign_ = (value > 0 ? Sign::Positive
                        : (value == 0 ? Sign::Neutral : Sign::Negative));
-    if (value == 0) base_shift();
+    if (value == 0) {
+      base_shift();
+    }
+
     value = std::abs(value);
+
     while (value != 0) {
       num_.push_front(value % BASE_);
       value /= BASE_;
@@ -41,52 +45,70 @@ class BigInteger {
   friend std::istream& operator>>(std::istream&, BigInteger&);
 
   bool operator==(const BigInteger& second) const {
-    if (num_.size() != second.num_.size() || sign_ != second.sign_)
+    if (num_.size() != second.num_.size() || sign_ != second.sign_) {
       return false;
+    }
 
     for (size_t i = 0; i < num_.size(); ++i) {
-      if (num_[i] != second.num_[i]) return false;
+      if (num_[i] != second.num_[i]) {
+        return false;
+      }
     }
 
     return true;
   }
 
-  bool operator!=(const BigInteger& second) const { return !(*this == second); }
+  bool operator!=(const BigInteger& second) const {
+    return !(*this == second);
+  }
 
   bool operator<(const BigInteger& second) const {
-    if (sign_ != second.sign_) return sign_ < second.sign_;
+    if (sign_ != second.sign_) {
+      return sign_ < second.sign_;
+    }
+
     if (sign_ == Sign::Positive) {
       if (num_.size() != second.num_.size()) {
         return num_.size() < second.num_.size();
       }
+
       for (size_t i = 0; i < num_.size(); ++i) {
         if (num_[i] != second.num_[i]) {
           return num_[i] < second.num_[i];
         }
       }
-      return false;
 
-    } else {
-      if (sign_ == Sign::Neutral) return false;
-      return second.abs() < abs();
+      return false;
     }
+
+    if (sign_ == Sign::Neutral) {
+      return false;
+    }
+
+    return second.abs() < abs();
   }
 
   bool operator<=(const BigInteger& second) const {
     return *this == second || *this < second;
   }
 
-  bool operator>(const BigInteger& second) const { return second < *this; }
+  bool operator>(const BigInteger& second) const {
+    return second < *this;
+  }
 
-  bool operator>=(const BigInteger& second) const { return !(*this < second); }
+  bool operator>=(const BigInteger& second) const {
+    return !(*this < second);
+  }
 
   BigInteger operator-() const {
     BigInteger new_bigint;
     new_bigint = *this;
+
     if (*this != 0) {
       new_bigint.sign_ =
           (sign_ == Sign::Positive ? Sign::Negative : Sign::Positive);
     }
+
     return new_bigint;
   }
 
@@ -95,7 +117,10 @@ class BigInteger {
       *this = other;
       return *this;
     }
-    if (other == 0) return *this;
+
+    if (other == 0) {
+      return *this;
+    }
 
     if (sign_ == other.sign_) {
       int64_t transfer = 0;
@@ -124,7 +149,6 @@ class BigInteger {
         }
 
       } else {
-
         for (size_t i = 0; i < num_.size() - other.num_.size(); ++i) {
           int64_t cnt_num = num_[num_.size() - other.num_.size() - 1 - i];
           num_[num_.size() - other.num_.size() - 1 - i] =
@@ -133,6 +157,7 @@ class BigInteger {
           transfer = (cnt_num + transfer) / BASE_;
         }
       }
+
       if (transfer != 0) {
         num_.push_front(transfer);
       }
@@ -174,7 +199,7 @@ class BigInteger {
           transfer =
               std::floor(static_cast<double>(cnt_num + transfer) / BASE_);
         }
-        
+
         RemoveLeadingZeros();
       } else {
         BigInteger cnt_bigint;
@@ -235,7 +260,9 @@ class BigInteger {
         transfer /= BASE_;
       }
 
-      if (i != cnt_second.num_.size() - 1) ans.base_shift();
+      if (i != cnt_second.num_.size() - 1) {
+        ans.base_shift();
+      }
     }
     ans.sign_ = (sign_ == other.sign_ ? Sign::Positive : Sign::Negative);
     *this = ans;
@@ -243,7 +270,9 @@ class BigInteger {
   }
 
   BigInteger& operator/=(const BigInteger& other) {
-    if (*this == 0) return *this;
+    if (*this == 0) {
+      return *this;
+    }
 
     BigInteger abs_other = other.abs();
     BigInteger ans;
@@ -287,19 +316,27 @@ class BigInteger {
       product *= left;
 
       cnt_divisible -= product;
+
       if (cnt_divisible.num_.size() >= abs_other.num_.size() &&
-          cnt_divisible != 0)
+          cnt_divisible != 0) {
         need_one_more = true;
-      
+      }
+
       ans.num_.push_back(left);
 
-      if (left == 0) one_more = true;
+      if (left == 0) {
+        one_more = true;
+      }
     }
 
     ans.RemoveLeadingZeros();
     ans.sign_ = (sign_ == other.sign_ ? Sign::Positive : Sign::Negative);
     *this = ans;
-    if (num_.size() == 1 && num_[0] == 0) sign_ = Sign::Neutral;
+
+    if (num_.size() == 1 && num_[0] == 0) {
+      sign_ = Sign::Neutral;
+    }
+
     return *this;
   }
 
@@ -333,13 +370,17 @@ class BigInteger {
     return ans;
   }
 
-  explicit operator bool() const { return sign_ != Sign::Neutral; }
+  explicit operator bool() const {
+    return sign_ != Sign::Neutral;
+  }
 
   std::string toString() const {
     static int STEP = 9;
     std::string ans;
 
-    if (sign_ == Sign::Negative) ans += '-';
+    if (sign_ == Sign::Negative) {
+      ans += '-';
+    }
 
     ans += std::to_string(num_[0]);
 
@@ -356,12 +397,16 @@ class BigInteger {
     BigInteger cnt_bigint;
     cnt_bigint = *this;
 
-    if (sign_ != Sign::Neutral) cnt_bigint.sign_ = Sign::Positive;
+    if (sign_ != Sign::Neutral) {
+      cnt_bigint.sign_ = Sign::Positive;
+    }
 
     return cnt_bigint;
   }
 
-  void base_shift() { num_.push_back(0); }
+  void base_shift() {
+    num_.push_back(0);
+  }
 };
 
 BigInteger operator+(const BigInteger& first, const BigInteger& second) {
@@ -394,7 +439,9 @@ BigInteger operator%(const BigInteger& first, const BigInteger& second) {
   return ans %= second;
 }
 
-BigInteger operator""_bi(unsigned long long x) { return BigInteger(x); }
+BigInteger operator""_bi(unsigned long long x) {
+  return BigInteger(x);
+}
 
 std::ostream& operator<<(std::ostream& out, const BigInteger& bigint) {
   out << bigint.toString();
@@ -442,9 +489,7 @@ class Rational {
   BigInteger denominator_;
 
   BigInteger GCD_(BigInteger first, BigInteger second) {
-
     while (first != 0 && second != 0) {
-
       if (first >= second) {
         first %= second;
       } else {
@@ -472,6 +517,7 @@ class Rational {
     numerator_ =
         numerator_ * other.denominator_ + denominator_ * other.numerator_;
     denominator_ *= other.denominator_;
+
     do_beauty_();
     return *this;
   }
@@ -480,6 +526,7 @@ class Rational {
     numerator_ =
         numerator_ * other.denominator_ - denominator_ * other.numerator_;
     denominator_ *= other.denominator_;
+
     do_beauty_();
     return *this;
   }
@@ -487,6 +534,7 @@ class Rational {
   Rational& operator*=(const Rational& other) {
     numerator_ = numerator_ * other.numerator_;
     denominator_ *= other.denominator_;
+
     do_beauty_();
     return *this;
   }
@@ -495,6 +543,7 @@ class Rational {
     numerator_ =
         numerator_ * other.denominator_ * (other.numerator_ > 0 ? 1 : -1);
     denominator_ *= other.numerator_.abs();
+
     do_beauty_();
     return *this;
   }
@@ -508,7 +557,9 @@ class Rational {
     return numerator_ == other.numerator_ && denominator_ == other.denominator_;
   }
 
-  bool operator!=(const Rational& other) const { return !(*this == other); }
+  bool operator!=(const Rational& other) const {
+    return !(*this == other);
+  }
 
   bool operator<(const Rational& other) const {
     return numerator_ * other.denominator_ < denominator_ * other.numerator_;
@@ -518,9 +569,13 @@ class Rational {
     return *this < other || *this == other;
   }
 
-  bool operator>(const Rational& other) const { return !(*this <= other); }
+  bool operator>(const Rational& other) const {
+    return !(*this <= other);
+  }
 
-  bool operator>=(const Rational& other) const { return !(*this < other); }
+  bool operator>=(const Rational& other) const {
+    return !(*this < other);
+  }
 
   std::string toString() {
     std::string ans;
@@ -563,11 +618,13 @@ class Rational {
       ccnt = std::string(STEP - ccnt.size(), '0') + ccnt;
       ans += ccnt;
     } while (--steps);
-    
+
     return ans;
   }
 
-  explicit operator double() const { return std::stod(asDecimal(20)); }
+  explicit operator double() const {
+    return std::stod(asDecimal(20));
+  }
 };
 
 Rational operator+(const Rational& first, const Rational& second) {
