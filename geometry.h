@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+
 const double kAccuracy = 1e-6;
 
 class Line;
@@ -19,7 +20,7 @@ class Point {
 
   bool operator==(const Point& other) const {
     return std::abs(x - other.x) < kAccuracy &&
-           std::abs(y - other.y < kAccuracy);
+           std::abs(y - other.y) < kAccuracy;
   }
 
   bool operator!=(const Point& other) const {
@@ -53,7 +54,7 @@ class Vector {
   }
 
   double abs() const {
-    return std::sqrt(x_coord * x_coord + y_coord * y_coord);
+    return std::sqrt(std::pow(x_coord, 2) + std::pow(y_coord, 2));
   }
 
   Vector operator*(double k) const {
@@ -89,6 +90,14 @@ class Vector {
 
   Vector normed() const {
     return *this * (1. / abs());
+  }
+
+  bool operator==(const Vector& other) const {
+    return is_coliniar(other) && std::abs(other.abs() - abs()) < kAccuracy;
+  }
+
+  bool operator!=(const Vector& other) const {
+    return !(*this == other);
   }
 };
 
@@ -161,6 +170,8 @@ class Shape {
   virtual void reflect(const Line&) = 0;
 
   virtual void scale(const Point&, double) = 0;
+
+  virtual ~Shape() {}
 };
 
 class Ellipse : public Shape {
@@ -243,12 +254,16 @@ class Ellipse : public Shape {
 };
 
 class Circle : public Shape {
- public:
+ private:
   Point center_;
   double r_;
 
  public:
   Circle(const Point& point, double r_) : center_(point), r_(r_) {}
+
+  Point center() const {
+    return center_;
+  }
 
   double radius() const {
     return r_;
@@ -354,11 +369,10 @@ class Polygon : public Shape {
     bool result = false;
 
     for (size_t i = 0; i < points_.size(); ++i) {
-      if ((points_[i].y < point.y &&
-               points_[(i - 1 + points_.size()) % points_.size()].y >=
-                   point.y ||
-           points_[(i - 1 + points_.size()) % points_.size()].y < point.y &&
-               points_[i].y >= point.y) &&
+      if (((points_[i].y < point.y &&
+            points_[(i - 1 + points_.size()) % points_.size()].y >= point.y) ||
+           (points_[(i - 1 + points_.size()) % points_.size()].y < point.y &&
+            points_[i].y >= point.y)) &&
           (points_[i].x +
                (point.y - points_[i].y) /
                    (points_[(i - 1 + points_.size()) % points_.size()].y -
@@ -447,8 +461,10 @@ class Triangle : public Polygon {
     Vector v1(points_[0], points_[1]);
     Vector v2(points_[0], points_[2]);
     double angle = std::acos((v1 * v2) / (v1.abs() * v2.abs()));
-    return points_[0] +
-           (v1.normed() + v2.normed()) * (0.5 / std::sin(angle / 2));
+    double r = 2 * area() / perimeter();
+
+    return points_[0] + (v1.normed() + v2.normed()).normed() *
+                            (r / std::sin(angle / 2));  ///???
   }
 
   Circle inscribedCircle() const {
@@ -488,7 +504,9 @@ class Triangle : public Polygon {
   }
 
   Point orthocenter() const {
-    return Point(centroid() + Vector(outcenter(), centroid()) * 2);
+    return Point(centroid() +
+                 Vector(outcenter(), centroid()) *
+                     2);  // Point(centroid()) + Vector(out, cen).scale(-1./2)
   }
 
   Line EulerLine() const {
@@ -502,15 +520,191 @@ class Triangle : public Polygon {
   }
 
   double area() const final {
-    ///
+    double a = points_[0].distance(points_[1]);
+    double b = points_[0].distance(points_[2]);
+    double c = points_[1].distance(points_[2]);
+    double p = (a + b + c) / 2;
+
+    return std::sqrt(p * (p - a) * (p - b) * (p - c));
   }
 };
 
-/*
+bool Shape::operator==(const Shape& other) const {
+  const Ellipse* cnt_this = dynamic_cast<const Ellipse*>(this);
+  const Ellipse* cnt_other = dynamic_cast<const Ellipse*>(&other);
 
-void print() {
-    for (const Point& point : points_) {
-      std::cout << point.x << ' ' << point.y << '\n';
-    }
+  if (cnt_this != nullptr && cnt_other != nullptr) {
+    auto this_focuses = cnt_this->focuses();
+    auto other_focuses = cnt_other->focuses();
+    return (this_focuses == other_focuses ||
+            (std::swap(this_focuses.first,
+                       this_focuses.second),  // офигеть я чё придумал, запятую
+                                              // использовал первый раз
+             this_focuses) == other_focuses) &&
+           std::abs(cnt_this->eccentricity() - cnt_other->eccentricity()) <
+               kAccuracy;
   }
-*/
+
+  const Circle* cir_this = dynamic_cast<const Circle*>(this);
+  const Circle* cir_other = dynamic_cast<const Circle*>(&other);
+
+  if (cir_this != nullptr && cir_other != nullptr) {
+    return cir_this->center() == cir_other->center() &&
+           std::abs(cir_other->radius() - cir_this->radius()) < kAccuracy;
+  }
+
+  const Polygon* pol_this = dynamic_cast<const Polygon*>(this);
+  const Polygon* pol_others = dynamic_cast<const Polygon*>(&other);
+
+  if (pol_others != nullptr && pol_this != nullptr) {
+    std::vector<Point> this_points = pol_this->getVertices();
+    std::vector<Point> this_points_rev = this_points;
+    std::reverse(this_points_rev.begin(), this_points_rev.end());
+    std::vector<Point> other_points = pol_others->getVertices();
+
+    if (this_points.size() != other_points.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < this_points.size(); ++i) {
+      bool all_good_1 = true;
+      bool all_good_2 = true;
+
+      for (size_t j = 0; j < this_points.size(); ++j) {
+        if (this_points[(i + j) % this_points.size()] != other_points[j]) {
+          all_good_1 = false;
+        }
+
+        if (this_points_rev[(i + j) % this_points.size()] != other_points[j]) {
+          all_good_2 = false;
+        }
+
+        if (!all_good_1 && !all_good_1) {
+          break;
+        }
+      }
+      if (all_good_1 || all_good_2) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return false;
+}
+
+bool Shape::isCongruentTo(const Shape& other) const {
+  const Ellipse* cnt_this = dynamic_cast<const Ellipse*>(this);
+  const Ellipse* cnt_other = dynamic_cast<const Ellipse*>(&other);
+
+  if (cnt_this != nullptr && cnt_other != nullptr) {
+    auto this_focuses = cnt_this->focuses();
+    auto other_focuses = cnt_other->focuses();
+    return (Vector(this_focuses.first, other_focuses.first)
+                .is_coliniar(
+                    Vector(this_focuses.second, other_focuses.second)) ||
+            Vector(this_focuses.second, other_focuses.first)
+                .is_coliniar(
+                    Vector(this_focuses.first, other_focuses.second))) &&
+           std::abs(cnt_this->eccentricity() - cnt_other->eccentricity()) <
+               kAccuracy;
+  }
+
+  const Circle* cir_this = dynamic_cast<const Circle*>(this);
+  const Circle* cir_other = dynamic_cast<const Circle*>(&other);
+
+  if (cir_this != nullptr && cir_other != nullptr) {
+    return std::abs(cir_other->radius() - cir_this->radius()) < kAccuracy;
+  }
+
+  const Polygon* pol_this = dynamic_cast<const Polygon*>(this);
+  const Polygon* pol_others = dynamic_cast<const Polygon*>(&other);
+
+  if (pol_others != nullptr && pol_this != nullptr) {
+    std::vector<Point> this_points = pol_this->getVertices();
+    std::vector<Point> this_points_rev = this_points;
+    std::reverse(this_points_rev.begin(), this_points_rev.end());
+    std::vector<Point> other_points = pol_others->getVertices();
+
+    if (this_points.size() != other_points.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < this_points.size(); ++i) {
+      bool all_good_1 = true;
+      bool all_good_2 = true;
+
+      for (size_t j = 0; j < this_points.size(); ++j) {
+        Vector v1 = Vector(this_points[(i + j) % this_points.size()],
+                           this_points[(i + j + 1) % this_points.size()]);
+        Vector v2 = Vector(this_points[(i + j + 1) % this_points.size()],
+                           this_points[(i + j + 2) % this_points.size()]);
+
+        Vector v3 = Vector(other_points[j % other_points.size()],
+                           other_points[(j + 1) % other_points.size()]);
+        Vector v4 = Vector(other_points[(j + 1) % other_points.size()],
+                           other_points[(j + 2) % other_points.size()]);
+
+        Vector v5 =
+            Vector(this_points_rev[(i + j) % this_points_rev.size()],
+                   this_points_rev[(i + j + 1) % this_points_rev.size()]);
+        Vector v6 =
+            Vector(this_points_rev[(i + j + 1) % this_points_rev.size()],
+                   this_points_rev[(i + j + 2) % this_points_rev.size()]);
+
+        if (std::abs(v1.abs() - v3.abs()) >= kAccuracy ||
+            std::abs(v1 * v2 - v3 * v4) >= kAccuracy) {
+          all_good_1 = false;
+        }
+
+        if (std::abs(v5.abs() - v3.abs()) >= kAccuracy ||
+            std::abs(v5 * v6 - v3 * v4) >= kAccuracy) {
+          all_good_2 = false;
+        }
+
+        if (!all_good_1 && !all_good_1) {
+          break;
+        }
+      }
+      if (all_good_1 || all_good_2) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return false;
+}
+
+bool Shape::isSimilarTo(const Shape& other) const {
+  const Ellipse* cnt_this = dynamic_cast<const Ellipse*>(this);
+  const Ellipse* cnt_other = dynamic_cast<const Ellipse*>(&other);
+
+  if (cnt_this != nullptr && cnt_other != nullptr) {
+    return std::abs(cnt_this->eccentricity() - cnt_other->eccentricity()) <
+           kAccuracy;
+  }
+
+  const Circle* cir_this = dynamic_cast<const Circle*>(this);
+  const Circle* cir_other = dynamic_cast<const Circle*>(&other);
+
+  if (cir_this != nullptr && cir_other != nullptr) {
+    return true;
+  }
+
+  const Polygon* pol_this = dynamic_cast<const Polygon*>(this);
+  const Polygon* pol_others = dynamic_cast<const Polygon*>(&other);
+
+  if (pol_others != nullptr && pol_this != nullptr) {
+    Polygon copy_this = *dynamic_cast<const Polygon*>(this);
+
+    double s = other.perimeter() / perimeter();
+    copy_this.scale(Point(0, 0), s);
+
+    return copy_this.isCongruentTo(other);
+  }
+
+  return false;
+}
