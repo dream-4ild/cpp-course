@@ -526,7 +526,7 @@ class Rational {
   }
 
  public:
-  Rational() = default;
+  Rational() : numerator_(0), denominator_(1) {}
 
   Rational(BigInteger bigint) : numerator_(bigint), denominator_(1) {}
 
@@ -612,7 +612,7 @@ class Rational {
   std::string asDecimal(size_t precision = 0) const {
     static const size_t STEP = 9;
     BigInteger integer_part = numerator_ / denominator_;
-    std::string ans = (numerator_ > 0 ? "" : "-") + integer_part.toString();
+    std::string ans = (numerator_ >= 0 ? "" : "-") + integer_part.toString();
 
     if (precision == 0 || denominator_ == 1) return ans;
 
@@ -669,4 +669,10 @@ Rational operator/(const Rational& first, const Rational& second) {
   Rational ans = first;
   ans /= second;
   return ans;
+}
+
+std::ostream& operator<<(std::ostream& output, const Rational& elem) {
+  output << elem.asDecimal(10);
+
+  return output;
 }
