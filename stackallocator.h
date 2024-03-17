@@ -9,6 +9,10 @@ class StackStorage {
 
   StackStorage() : arr() {}
 
+  StackStorage(const StackStorage&) = delete;
+
+  StackStorage& operator=(const StackStorage&) = delete;
+
   bool operator==(const StackStorage& other) const {
     return arr = other.arr_;
   }
@@ -85,7 +89,7 @@ class StackAllocator {
     return *this;
   }
 
-  using propagate_on_container_copy_assignment = std::true_type;
+  using propagate_on_container_copy_assignment = std::false_type;
 
   template <typename U>
   struct rebind {
