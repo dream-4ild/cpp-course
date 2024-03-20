@@ -27,11 +27,14 @@
 ### 7) Unordered Map : later (эта и следующие ещё не написаны)
 Move-semantics, обход итератором за O(колличество_элементов)
 
-### 8) Shared Ptr
+### 8) tuple
+Научиться и осознать работу с типами, auto, dectype etc...
+
+### 9) Shared Ptr
 RAII
 
-### 9) Variant
+### 10) Variant
 compile-time/runtime design???
 
-### 10) Type List
+### 11) Type List
 type traits
