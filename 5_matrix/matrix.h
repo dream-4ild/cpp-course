@@ -237,10 +237,6 @@ class Matrix {
     while (row < N && collum < M) {
       bool find_non_zero_elem = false;
 
-      // if (row == 15) {
-      //   std::cout << ans_matrix[row][collum].numerator_;
-      // }
-
       for (size_t i = row; i < N; ++i) {
         if (ans_matrix[i][collum] != zero) {
           if (i != row) {
@@ -377,23 +373,9 @@ class Matrix {
   }
 
   Matrix& operator*=(const Matrix<N, N, Field>& other) {
-    // if (matrix[0][0] != Field(87) && N == 20 &&
-    //     other.getRow(1)[0] != Field(87)) {
-    //   std::cerr << "*=s\n";
-    //   for (size_t i = 0; i < N; ++i) {
-    //     std::cerr << matrix[0][i] << ' ';
-    //   }
-    //   std::cerr << '\n';
-    // }
     static_assert(N == M);
     *this = *this * other;
-    // if (matrix[0][0] != Field(87) && N == 20) {
-    //   std::cerr << "*=f\n";
-    //   for (size_t i = 0; i < N; ++i) {
-    //     std::cerr << matrix[0][i] << ' ';
-    //   }
-    //   std::cerr << '\n';
-    // }
+
     return *this;
   }
 
@@ -435,18 +417,6 @@ class Matrix {
 
   Field det() const {
     static_assert(N == M);
-
-    bool flag = true;
-    for (size_t i = 0; i < M; ++i) {
-      if (matrix[0][i] != Field(0)) {
-        flag = true;
-        break;
-      }
-    }
-    if (flag && N == 20) {
-      std::cerr << N << ' ' << M << " 00000!\n";
-      return Field(1);
-    }
 
     auto gausse_matrix = step_view<M>(*this);
     Field ans(1);
