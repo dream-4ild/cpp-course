@@ -102,33 +102,19 @@ struct base_node {
   base_node* prev;
   base_node* next;
 };
-
-template <typename T, typename Alloc>
-class base_list {
- protected:
-  struct node : public base_node {
-    T value;
-  };
-
-  using default_alloc = Alloc;
-  using node_alloc =
-      typename std::allocator_traits<Alloc>::template rebind_alloc<node>;
-
-  default_alloc T_alloc_;
-  node_alloc node_alloc_;
-
-  explicit base_list(const default_alloc& alloc)
-      : T_alloc_(alloc), node_alloc_(alloc) {}
-};
 }  // namespace base
 
 template <typename T, typename Alloc = std::allocator<T>>
-class List : private base::base_list<T, Alloc> {
+class List {
  private:
-  using typename base::base_list<T, Alloc>::node;
-  using base_node = base::base_node;
-  using typename base::base_list<T, Alloc>::default_alloc;
-  using typename base::base_list<T, Alloc>::node_alloc;
+  struct node : public base::base_node {
+    T value;
+  };
+
+  using base_node     = base::base_node;
+  using default_alloc = Alloc;
+  using node_alloc =
+      typename std::allocator_traits<Alloc>::template rebind_alloc<node>;
 
   template <bool is_const>
   class base_iterator {
@@ -205,10 +191,8 @@ class List : private base::base_list<T, Alloc> {
 
   base_node fake_node_;
   size_t sz_;
-
-  using base::base_list<T, Alloc>::T_alloc_;
-  using base::base_list<T, Alloc>::node_alloc_;
-  using base_list = typename base::base_list<T, Alloc>;
+  [[no_unique_address]] default_alloc T_alloc_;
+  [[no_unique_address]] node_alloc node_alloc_;
 
   template <typename Allocator>
   void insert_(base_iterator<true> it, const T& value, Allocator& alloc) {
@@ -242,6 +226,12 @@ class List : private base::base_list<T, Alloc> {
     --sz_;
   }
 
+  void clear_() {
+    while (sz_ > 0) {
+      erase_(--end(), node_alloc_);
+    }
+  }
+
  public:
   using iterator               = base_iterator<false>;
   using const_iterator         = base_iterator<true>;
@@ -251,11 +241,12 @@ class List : private base::base_list<T, Alloc> {
   List() : List(Alloc()) {}
 
   explicit List(const Alloc& alloc)
-      : base_list(
+      : fake_node_{&fake_node_, &fake_node_},
+        sz_(0),
+        T_alloc_(
             std::allocator_traits<Alloc>::select_on_container_copy_construction(
                 alloc)),
-        fake_node_{&fake_node_, &fake_node_},
-        sz_(0) {}
+        node_alloc_(T_alloc_) {}
 
   List(size_t n_) : List(n_, Alloc()) {}
 
@@ -292,9 +283,7 @@ class List : private base::base_list<T, Alloc> {
         insert_(end(), value, node_alloc_);
 
       } catch (...) {
-        while (sz_ > 0) {
-          erase_(--end(), node_alloc_);
-        }
+        clear_();
 
         throw;
       }
@@ -469,8 +458,6 @@ class List : private base::base_list<T, Alloc> {
   }
 
   ~List() {
-    while (sz_ != 0) {
-      erase_(--end(), node_alloc_);
-    }
+    clear_();
   }
 };
