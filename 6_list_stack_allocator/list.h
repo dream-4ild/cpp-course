@@ -1,117 +1,43 @@
 #include <memory>
 
-template <size_t N>
-class StackStorage {
- public:
-  void* current = arr;
-  char arr[N];
-  size_t space = N;
-
-  StackStorage() : arr() {}
-
-  StackStorage(const StackStorage&) = delete;
-
-  StackStorage& operator=(const StackStorage&) = delete;
-
-  bool operator==(const StackStorage& other) const {
-    return arr = other.arr_;
-  }
-
-  bool operator!=(const StackStorage& other) const {
-    return arr != other.arr;
-  }
-};
-
-template <typename T, size_t N>
-class StackAllocator {
- private:
-  StackStorage<N>& store_;
-
-  template <typename U, size_t M>
-  friend class StackAllocator;
-
- public:
-  using value_type = T;
-  using pointer    = T*;
-
-  template <typename U>
-  StackAllocator(const StackAllocator<U, N>& other) : store_(other.store_) {}
-
-  explicit StackAllocator(StackStorage<N>& store) : store_(store) {}
-
-  StackAllocator& operator=(const StackAllocator& other) {
-    store_ = other.store_;
-    return *this;
-  }
-
-  ~StackAllocator() = default;
-
-  [[nodiscard]] pointer allocate(size_t n_) const {
-    if (std::align(alignof(T), sizeof(T) * n_, store_.current, store_.space))
-        [[likely]] {
-      auto result = reinterpret_cast<pointer>(store_.current);
-
-      store_.current = reinterpret_cast<char*>(store_.current) + sizeof(T) * n_;
-      store_.space -= sizeof(T) * n_;
-
-      return result;
-    }
-    throw std::bad_alloc();
-  }
-
-  void destroy(pointer ptr) const {
-    ptr->~T();
-  }
-
-  void deallocate(pointer, size_t) const {}
-
-  template <typename U, size_t M>
-  bool operator==(const StackAllocator<U, M>&) {
-    return false;
-  }
-
-  template <typename U>
-  bool operator==(const StackAllocator<U, N>& other) const {
-    return store_ == other.store_;
-  }
-
-  template <typename U, size_t M>
-  bool operator!=(const StackAllocator<U, M>&) {
-    return true;
-  }
-
-  template <typename U>
-  bool operator!=(const StackAllocator<U, N>& other) const {
-    return store_ != other.store_;
-  }
-
-  StackAllocator select_on_container_construction() const {
-    return *this;
-  }
-
-  using propagate_on_container_copy_assignment = std::false_type;
-
-  template <typename U>
-  struct rebind {
-    using other = StackAllocator<U, N>;
-  };
-};
-
-namespace base {
-struct base_node {
-  base_node* prev;
-  base_node* next;
-};
-}  // namespace base
-
 template <typename T, typename Alloc = std::allocator<T>>
 class List {
  private:
-  struct node : public base::base_node {
-    T value;
+  struct base_node {
+    base_node* prev;
+    base_node* next;
+
+    base_node() = default;
+
+    base_node(base_node* prev, base_node* next) : prev(prev), next(next) {}
+
+    base_node(const base_node&) = default;
+
+    base_node(base_node&&) = default;
+
+    base_node& operator=(const base_node&) = default;
+
+    base_node& operator=(base_node&&) = default;
   };
 
-  using base_node     = base::base_node;
+  struct node : public base_node {
+    T value;
+
+    node() = default;
+
+    template <typename U>
+    node(base_node* prev, base_node* next, U&& value)
+        : base_node(prev, next), value(std::forward<U>(value)) {}
+
+    node(const node&) = default;
+
+    node(node&&) = default;
+
+    node& operator=(const node&) = default;
+
+    node& operator=(node&&) = default;
+  };
+
   using default_alloc = Alloc;
   using node_alloc =
       typename std::allocator_traits<Alloc>::template rebind_alloc<node>;
@@ -194,13 +120,15 @@ class List {
   [[no_unique_address]] default_alloc T_alloc_;
   [[no_unique_address]] node_alloc node_alloc_;
 
-  template <typename Allocator>
-  void insert_(base_iterator<true> it, const T& value, Allocator& alloc) {
+  template <typename U, typename Allocator>
+  void insert_(base_iterator<true> it, U&& value, Allocator& alloc) {
+    static_assert(std::is_convertible_v<U, T>);
     node* new_node = std::allocator_traits<Allocator>::allocate(alloc, 1);
 
     try {
       std::allocator_traits<Allocator>::construct(
-          alloc, new_node, node{{it.get_node()->prev, it.get_node()}, value});
+          alloc, new_node, it.get_node()->prev, it.get_node(),
+          std::forward<U>(value));
 
     } catch (...) {
       std::allocator_traits<Allocator>::deallocate(alloc, new_node, 1);
@@ -241,11 +169,9 @@ class List {
   List() : List(Alloc()) {}
 
   explicit List(const Alloc& alloc)
-      : fake_node_{&fake_node_, &fake_node_},
+      : fake_node_(&fake_node_, &fake_node_),
         sz_(0),
-        T_alloc_(
-            std::allocator_traits<Alloc>::select_on_container_copy_construction(
-                alloc)),
+        T_alloc_(alloc),
         node_alloc_(T_alloc_) {}
 
   List(size_t n_) : List(n_, Alloc()) {}
@@ -290,7 +216,10 @@ class List {
     }
   }
 
-  List(const List& other) : List(other.get_allocator()) {
+  List(const List& other)
+      : List(
+            std::allocator_traits<Alloc>::select_on_container_copy_construction(
+                other.get_allocator())) {
     auto it = other.cbegin();
     for (size_t i = 0; i < other.size(); ++i, ++it) {
       node* new_node =
@@ -316,7 +245,20 @@ class List {
     }
   }
 
-  List& operator=(const List& other) {
+  List(List&& other) noexcept
+      : fake_node_(other.fake_node_),
+        sz_(other.sz_),
+        T_alloc_(other.T_alloc_),
+        node_alloc_(T_alloc_) {
+    other.fake_node_ = base_node(&other.fake_node_, &other.fake_node_);
+
+    begin().get_node()->prev   = &fake_node_;
+    (--end()).get_node()->next = &fake_node_;
+
+    other.sz_ = 0;
+  }
+
+  List& operator=(const List& other) & {
     auto new_alloc = std::allocator_traits<
                          Alloc>::propagate_on_container_copy_assignment::value
                          ? other.get_allocator()
@@ -332,7 +274,7 @@ class List {
 
     auto it = other.cbegin();
 
-    for (int i = 0; i < (int)other.size(); ++i) {
+    for (int i = 0; i < (int)other.size(); ++i, ++it) {
       try {
         node* new_node =
             std::allocator_traits<node_alloc>::allocate(node_alloc_, 1);
@@ -377,12 +319,63 @@ class List {
     return *this;
   }
 
+  List& operator=(List&& other) & noexcept(
+      std::allocator_traits<Alloc>::is_always_equal::value ||
+      std::is_nothrow_move_constructible_v<T>) {
+    if (std::allocator_traits<
+            Alloc>::propagate_on_container_move_assignment::value ||
+        (T_alloc_ == other.T_alloc_)) {
+      clear_();
+
+      fake_node_       = other.fake_node_;
+      other.fake_node_ = base_node(&other.fake_node_, &other.fake_node_);
+
+      begin().get_node()->prev   = &fake_node_;
+      (--end()).get_node()->next = &fake_node_;
+
+      std::swap(sz_, other.sz_);
+
+      if constexpr (std::allocator_traits<
+                        Alloc>::propagate_on_container_move_assignment::value) {
+        T_alloc_    = other.T_alloc_;
+        node_alloc_ = other.node_alloc_;
+      }
+
+    } else {
+      auto old_end = --end();
+
+      for (auto it = other.begin(); it != other.end(); ++it) {
+        try {
+          insert(end(), std::move(*it));
+        } catch (...) {
+          --it;
+          for (; end() != old_end; --it) {
+            *it = std::move(*(--end()));
+            pop_back();
+          }
+
+          throw;
+        }
+      }
+
+      ++old_end;
+      for (auto it = begin(); it != old_end; ++it) {
+        pop_front();
+      }
+
+      other.clear_();
+    }
+
+    return *this;
+  }
+
   [[nodiscard]] size_t size() const {
     return sz_;
   }
 
-  void insert(const_iterator it, const T& value) {
-    insert_(it, value, node_alloc_);
+  template <typename U>
+  void insert(const_iterator it, U&& value) {
+    insert_(it, std::forward<U>(value), node_alloc_);
   }
 
   void erase(const_iterator it) noexcept(std::is_nothrow_destructible_v<T>) {
@@ -441,12 +434,14 @@ class List {
     return T_alloc_;
   }
 
-  void push_back(const T& value) {
-    insert(end(), value);
+  template <typename U>
+  void push_back(U&& value) {
+    insert(end(), std::forward<U>(value));
   }
 
-  void push_front(const T& value) {
-    insert(begin(), value);
+  template <typename U>
+  void push_front(U&& value) {
+    insert(begin(), std::forward<U>(value));
   }
 
   void pop_back() {
