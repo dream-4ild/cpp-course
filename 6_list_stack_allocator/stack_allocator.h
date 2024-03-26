@@ -38,10 +38,7 @@ class StackAllocator {
 
   explicit StackAllocator(StackStorage<N>& store) : store_(store) {}
 
-  StackAllocator& operator=(const StackAllocator& other) {
-    store_ = other.store_;
-    return *this;
-  }
+  StackAllocator& operator=(const StackAllocator&) = delete;
 
   ~StackAllocator() = default;
 
