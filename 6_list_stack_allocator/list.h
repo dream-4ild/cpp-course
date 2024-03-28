@@ -29,6 +29,8 @@ class List {
     node(base_node* prev, base_node* next, U&& value)
         : base_node(prev, next), value(std::forward<U>(value)) {}
 
+    node(base_node* prev, base_node* next) : base_node(prev, next), value() {}
+
     node(const node&) = default;
 
     node(node&&) = default;
@@ -117,18 +119,17 @@ class List {
 
   base_node fake_node_;
   size_t sz_;
-  [[no_unique_address]] default_alloc T_alloc_;
-  [[no_unique_address]] node_alloc node_alloc_;
+  [[no_unique_address]] mutable default_alloc T_alloc_;
+  [[no_unique_address]] mutable node_alloc node_alloc_;
 
-  template <typename U, typename Allocator>
-  void insert_(base_iterator<true> it, U&& value, Allocator& alloc) {
-    static_assert(std::is_convertible_v<U, T>);
+  template <typename Allocator, typename... Args>
+  void insert_(base_iterator<true> it, Allocator& alloc, Args&&... args) {
     node* new_node = std::allocator_traits<Allocator>::allocate(alloc, 1);
 
     try {
       std::allocator_traits<Allocator>::construct(
           alloc, new_node, it.get_node()->prev, it.get_node(),
-          std::forward<U>(value));
+          std::forward<Args>(args)...);
 
     } catch (...) {
       std::allocator_traits<Allocator>::deallocate(alloc, new_node, 1);
@@ -180,39 +181,13 @@ class List {
 
   List(size_t n_, const Alloc& alloc) : List(alloc) {
     while (sz_ < n_) {
-      node* new_node =
-          std::allocator_traits<node_alloc>::allocate(node_alloc_, 1);
-
-      try {
-        std::allocator_traits<node_alloc>::construct(node_alloc_, new_node);
-
-      } catch (...) {
-        std::allocator_traits<node_alloc>::deallocate(node_alloc_, new_node, 1);
-        throw;
-      }
-
-      auto cend = --end();
-
-      new_node->prev = cend.get_node();
-      new_node->next = cend.get_node()->next;
-
-      cend.get_node()->next->prev = new_node;
-      cend.get_node()->next       = new_node;
-
-      ++sz_;
+      insert_(end(), node_alloc_);
     }
   }
 
   List(size_t n_, const T& value, const Alloc& alloc) : List(alloc) {
     while (sz_ < n_) {
-      try {
-        insert_(end(), value, node_alloc_);
-
-      } catch (...) {
-        clear_();
-
-        throw;
-      }
+      insert_(end(), node_alloc_, value);
     }
   }
 
@@ -220,28 +195,8 @@ class List {
       : List(
             std::allocator_traits<Alloc>::select_on_container_copy_construction(
                 other.get_allocator())) {
-    auto it = other.cbegin();
-    for (size_t i = 0; i < other.size(); ++i, ++it) {
-      node* new_node =
-          std::allocator_traits<node_alloc>::allocate(node_alloc_, 1);
-
-      try {
-        std::allocator_traits<node_alloc>::construct(
-            node_alloc_, new_node, static_cast<node&>(*(it.get_node())));
-      } catch (...) {
-        std::allocator_traits<node_alloc>::deallocate(node_alloc_, new_node, 1);
-        throw;
-      }
-
-      auto cend = --end();
-
-      new_node->prev = cend.get_node();
-      new_node->next = cend.get_node()->next;
-
-      cend.get_node()->next->prev = new_node;
-      cend.get_node()->next       = new_node;
-
-      ++sz_;
+    for (auto it = other.cbegin(); it != other.cend(); ++it) {
+      insert_(end(), node_alloc_, *it);
     }
   }
 
@@ -276,27 +231,7 @@ class List {
 
     for (int i = 0; i < (int)other.size(); ++i, ++it) {
       try {
-        node* new_node =
-            std::allocator_traits<node_alloc>::allocate(node_alloc_, 1);
-
-        try {
-          std::allocator_traits<node_alloc>::construct(
-              node_alloc_, new_node, static_cast<node&>(*(it.get_node())));
-        } catch (...) {
-          std::allocator_traits<node_alloc>::deallocate(node_alloc_, new_node,
-                                                        1);
-          throw;
-        }
-
-        auto cend = --end();
-
-        new_node->prev = cend.get_node();
-        new_node->next = cend.get_node()->next;
-
-        cend.get_node()->next->prev = new_node;
-        cend.get_node()->next       = new_node;
-
-        ++sz_;
+        insert_(end(), new_node_alloc, *it);
 
       } catch (...) {
         for (; i > 0; --i) {
@@ -375,7 +310,7 @@ class List {
 
   template <typename U>
   void insert(const_iterator it, U&& value) {
-    insert_(it, std::forward<U>(value), node_alloc_);
+    insert_(it, node_alloc_, std::forward<U>(value));
   }
 
   void erase(const_iterator it) noexcept(std::is_nothrow_destructible_v<T>) {

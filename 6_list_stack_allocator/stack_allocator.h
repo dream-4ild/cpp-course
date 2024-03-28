@@ -1,4 +1,5 @@
 #include <memory>
+
 template <size_t N>
 class StackStorage {
  public:
