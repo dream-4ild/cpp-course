@@ -96,31 +96,33 @@ class List {
       return res;
     }
 
-    [[nodiscard]] base_node* get_node() const {
+    [[nodiscard]] pointer operator->() const {
+      return &(static_cast<node*>(node_)->value);
+    }
+
+    [[nodiscard]] base_node* get_base_node() const {
       return node_;
     }
+    
+    [[nodiscard]] node* get_node() const {
+      return static_cast<node*>(node_);
+    }
 
-    bool operator==(const base_iterator<true>& other) {
+    template <bool IsConst>
+    bool operator==(const base_iterator<IsConst>& other) const {
       return node_ == other.node_;
     }
 
-    bool operator==(const base_iterator<false>& other) {
-      return node_ == other.node_;
-    }
-
-    bool operator!=(const base_iterator<true>& other) {
-      return node_ != other.node_;
-    }
-
-    bool operator!=(const base_iterator<false>& other) {
+    template <bool IsConst>
+    bool operator!=(const base_iterator<IsConst>& other) const {
       return node_ != other.node_;
     }
   };
 
   base_node fake_node_;
   size_t sz_;
-  [[no_unique_address]] mutable default_alloc T_alloc_;
-  [[no_unique_address]] mutable node_alloc node_alloc_;
+  [[no_unique_address]] default_alloc T_alloc_;
+  [[no_unique_address]] node_alloc node_alloc_;
 
   template <typename Allocator, typename... Args>
   void insert_(base_iterator<true> it, Allocator& alloc, Args&&... args) {
@@ -128,7 +130,7 @@ class List {
 
     try {
       std::allocator_traits<Allocator>::construct(
-          alloc, new_node, it.get_node()->prev, it.get_node(),
+          alloc, new_node, it.get_base_node()->prev, it.get_base_node(),
           std::forward<Args>(args)...);
 
     } catch (...) {
@@ -136,14 +138,14 @@ class List {
       throw;
     }
 
-    it.get_node()->prev->next = new_node;
-    it.get_node()->prev       = new_node;
+    it.get_base_node()->prev->next = new_node;
+    it.get_base_node()->prev       = new_node;
     ++sz_;
   }
 
   template <typename Allocator>
   void erase_(base_iterator<true> it, Allocator& alloc) {
-    auto old_node = it.get_node();
+    auto old_node = it.get_base_node();
 
     old_node->prev->next = old_node->next;
     old_node->next->prev = old_node->prev;
@@ -207,8 +209,8 @@ class List {
         node_alloc_(T_alloc_) {
     other.fake_node_ = base_node(&other.fake_node_, &other.fake_node_);
 
-    begin().get_node()->prev   = &fake_node_;
-    (--end()).get_node()->next = &fake_node_;
+    begin().get_base_node()->prev   = &fake_node_;
+    (--end()).get_base_node()->next = &fake_node_;
 
     other.sz_ = 0;
   }
@@ -265,8 +267,8 @@ class List {
       fake_node_       = other.fake_node_;
       other.fake_node_ = base_node(&other.fake_node_, &other.fake_node_);
 
-      begin().get_node()->prev   = &fake_node_;
-      (--end()).get_node()->next = &fake_node_;
+      begin().get_base_node()->prev   = &fake_node_;
+      (--end()).get_base_node()->next = &fake_node_;
 
       std::swap(sz_, other.sz_);
 
@@ -308,9 +310,9 @@ class List {
     return sz_;
   }
 
-  template <typename U>
-  void insert(const_iterator it, U&& value) {
-    insert_(it, node_alloc_, std::forward<U>(value));
+  template <typename... Args>
+  void insert(const_iterator it, Args&&... args) {
+    insert_(it, node_alloc_, std::forward<Args>(args)...);
   }
 
   void erase(const_iterator it) noexcept(std::is_nothrow_destructible_v<T>) {
@@ -369,14 +371,14 @@ class List {
     return T_alloc_;
   }
 
-  template <typename U>
-  void push_back(U&& value) {
-    insert(end(), std::forward<U>(value));
+  template <typename... U>
+  void push_back(U&&... value) {
+    insert(end(), std::forward<U>(value)...);
   }
 
-  template <typename U>
-  void push_front(U&& value) {
-    insert(begin(), std::forward<U>(value));
+  template <typename... U>
+  void push_front(U&&... value) {
+    insert(begin(), std::forward<U>(value)...);
   }
 
   void pop_back() {
