@@ -14,27 +14,25 @@
 ### 4) Geometry : 10.12.2023
 Знакомство с наследованием, виртуальными функциями, абстрактными классами
 
-
 ### 5) Matrix : 22.12.2023
 Знакомство с шаблонами, метафункциями
 
 ### 5') Deque : пропущена, но всё, что тут изучалось, написано в следующей задаче
- Знакомство с итераторами, strong safety
+Знакомство с итераторами, strong exception safety
 
 ### 6) List+StackAllocator : 17.03.2024
 Знакомство с аллокаторами, alignment, allocator awear containers, EBO
 
-### 7) Unordered Map : later (эта и следующие ещё не написаны)
+### 7) Unordered Map : 31.03.2024 (ещё не прошла ревью по понятным причинам)), в отдельной ветке)
 Move-semantics, обход итератором за O(колличество_элементов)
 
-### 8) tuple
-Научиться и осознать работу с типами, auto, dectype etc...
+### 8) Shared Ptr : soon (в отдельной ветке)
+RAII, type erasure
 
-### 9) Shared Ptr
-RAII
+### 9) tuple
+auto, decltype, declval, SFINAE, requires, concepts, CTAD
 
-### 10) Variant
-compile-time/runtime design???
+### 10) Function
 
-### 11) Type List
-type traits
+### 11) Variant
+
