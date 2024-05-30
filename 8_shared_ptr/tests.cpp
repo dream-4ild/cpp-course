@@ -452,36 +452,41 @@ void test_make_allocate_shared() {
   destroy_called    = 0;
 }
 
-/*struct Enabled: public EnableSharedFromThis<Enabled> {
-    SharedPtr<Enabled> get_shared() {
-        return shared_from_this();
-    }
+struct Enabled : public EnableSharedFromThis<Enabled> {
+  int a;
+  Enabled() : a(10) {}
+  SharedPtr<Enabled> get_shared() {
+    return shared_from_this();
+  }
+  ~Enabled() {
+    a = 4;
+  }
 };
 
 void test_enable_shared_from_this() {
-    {
-        Enabled e;
-        bool caught = false;
-        try {
-            e.get_shared();
-        } catch (...) {
-            caught = true;
-        }
-        assert(caught);
+  {
+    Enabled e;
+    bool caught = false;
+    try {
+      e.get_shared();
+    } catch (...) {
+      caught = true;
     }
+    assert(caught);
+  }
 
-    auto esp = makeShared<Enabled>();
+  auto esp = makeShared<Enabled>();
 
-    auto& e = *esp;
-    auto sp = e.get_shared();
+  auto& e = *esp;
+  auto sp = e.get_shared();
 
-    assert(sp.use_count() == 2);
+  assert(sp.use_count() == 2);
 
-    esp.reset();
-    assert(sp.use_count() == 1);
+  esp.reset();
+  assert(sp.use_count() == 1);
 
-    sp.reset();
-}*/
+  sp.reset();
+}
 
 int mother_created   = 0;
 int mother_destroyed = 0;
@@ -626,13 +631,13 @@ void test_custom_deleter() {
 }
 
 int main() {
-  // static_assert(!std::is_base_of_v<std::shared_ptr<VerySpecialType>,
-  // SharedPtr<VerySpecialType>>,
-  //         "don't try to use std smart pointers");
+   static_assert(!std::is_base_of_v<std::shared_ptr<VerySpecialType>,
+   SharedPtr<VerySpecialType>>,
+           "don't try to use std smart pointers");
 
-  // static_assert(!std::is_base_of_v<std::weak_ptr<VerySpecialType>,
-  // WeakPtr<VerySpecialType>>,
-  //         "don't try to use std smart pointers");
+   static_assert(!std::is_base_of_v<std::weak_ptr<VerySpecialType>,
+   WeakPtr<VerySpecialType>>,
+           "don't try to use std smart pointers");
 
   std::cerr << "Starting tests..." << std::endl;
 
@@ -645,7 +650,8 @@ int main() {
   test_make_allocate_shared();
   std::cerr << "Test 3 (make/allocate shared) passed." << std::endl;
 
-  // test_enable_shared_from_this();
+  test_enable_shared_from_this();
+  std::cerr << "Test 3.5 (enable_shared) passed." << std::endl;
 
   test_inheritance_destroy();
   std::cerr << "Test 4 (inheritance) passed." << std::endl;

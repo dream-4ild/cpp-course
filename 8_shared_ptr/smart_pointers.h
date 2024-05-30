@@ -6,7 +6,7 @@ concept Deleter = requires(Del del, T* ptr) {
   del.operator()(ptr);
 };
 
-namespace my {
+namespace {
 class base_control_block {
  private:
   virtual void delete_block_if_need() = 0;
@@ -37,14 +37,14 @@ class regular_control_block : public base_control_block {
   [[no_unique_address]] Del del;
   [[no_unique_address]] Alloc alloc;
 
-  void delete_block_if_need() override {
+  void delete_block_if_need() final {
     if (!weak_count) {
       using block_alloc = typename std::allocator_traits<
           Alloc>::template rebind_alloc<regular_control_block>;
       block_alloc b_l(alloc);
 
       del.~Del();
-      alloc.~Alloc();  // TODO wtf...
+      alloc.~Alloc();
 
       std::allocator_traits<block_alloc>::deallocate(b_l, this, 1);
     }
@@ -66,7 +66,7 @@ class regular_control_block : public base_control_block {
   regular_control_block& operator=(const regular_control_block&) = default;
   regular_control_block& operator=(regular_control_block&&)      = default;
 
-  void destroy_shared(void* ptr) override {
+  void destroy_shared(void* ptr) final {
     --shared_count;
 
     if (!shared_count) {
@@ -83,8 +83,8 @@ class make_shared_control_block : public base_control_block {
   [[no_unique_address]] Alloc alloc;
 
  private:
-  void delete_block_if_need() override {
-    if (!weak_count) {
+  void delete_block_if_need() final {
+    if (!weak_count && !shared_count) {
       using CB_alloc = std::allocator_traits<Alloc>::template rebind_alloc<
           make_shared_control_block>;
       CB_alloc cb_alloc;
@@ -112,32 +112,35 @@ class make_shared_control_block : public base_control_block {
       default;
   make_shared_control_block& operator=(make_shared_control_block&&) = default;
 
-  void destroy_shared(void*) override {
-    --shared_count;
-
-    if (!shared_count) {
-      std::allocator_traits<Alloc>::destroy(alloc, &this->value);
-      delete_block_if_need();
+  void destroy_shared(void*) final {
+    if (shared_count == 1) {
+      std::allocator_traits<Alloc>::destroy(alloc, &value);
     }
+    --shared_count;
+    delete_block_if_need();
   }
 };
-}  // namespace my
+}  // namespace
 
 template <typename T>
-class SharedPtr {  // TODO во всех конструкторах прибавляю 1, но там мб был
-                   // nullptr
+struct EnableSharedFromThis;
+
+template <typename T>
+class SharedPtr {
  private:
-  T* ptr_                     = nullptr;
-  my::base_control_block* bc_ = nullptr;
+  T* ptr_                 = nullptr;
+  base_control_block* bc_ = nullptr;
 
   template <typename Alloc>
-  explicit SharedPtr(my::make_shared_control_block<T, Alloc>* ptr)
-      : ptr_(&ptr->value), bc_(ptr) {}
+  explicit SharedPtr(make_shared_control_block<T, Alloc>* ptr)
+      : ptr_(&ptr->value), bc_(ptr) {
+    if constexpr (std::is_base_of_v<EnableSharedFromThis<T>, T>) {
+      ptr->value.wptr = *this;
+    }
+  }
 
-  SharedPtr(T* ptr_, my::base_control_block* bc_) noexcept
-      : ptr_(ptr_), bc_(bc_) {
+  SharedPtr(T* ptr_, base_control_block* bc_) noexcept : ptr_(ptr_), bc_(bc_) {
     ++bc_->shared_count;
-    std::cerr << "private constructor for weak used" << std::endl;
   }
 
   template <typename U>
@@ -150,7 +153,7 @@ class SharedPtr {  // TODO во всех конструкторах прибав
   friend class WeakPtr;
 
  public:
-  using value_type = T;  // TODO remove_ref??
+  using value_type = T;
   using reference  = T&;
   using pointer    = T*;
 
@@ -159,13 +162,19 @@ class SharedPtr {  // TODO во всех конструкторах прибав
   template <typename U>
     requires(std::is_base_of_v<T, U> || std::is_same_v<T, U>)
   explicit SharedPtr(U* ptr)
-      : ptr_(ptr), bc_(new my::regular_control_block<U>(1, 0)) {}
+      : ptr_(ptr), bc_(new regular_control_block<U>(1, 0)) {
+    if constexpr (std::is_base_of_v<EnableSharedFromThis<U>, U>) {
+      ptr->wptr = this;
+    }
+  }
 
   template <typename U>
     requires(std::is_base_of_v<T, U> || std::is_same_v<T, U>)
   SharedPtr(const SharedPtr<U>& other) noexcept
       : ptr_(other.ptr_), bc_(other.bc_) {
-    ++bc_->shared_count;
+    if (bc_) {
+      ++bc_->shared_count;
+    }
   }
 
   SharedPtr(const SharedPtr& other) noexcept
@@ -177,7 +186,7 @@ class SharedPtr {  // TODO во всех конструкторах прибав
 
   template <typename U>
     requires(std::is_base_of_v<T, U> || std::is_same_v<T, U>)
-  explicit SharedPtr(const SharedPtr<U>& other, T* ptr) noexcept  // TODO
+  explicit SharedPtr(const SharedPtr<U>& other, T* ptr) noexcept
       : ptr_(ptr), bc_(other.bc_) {
     if (bc_) {
       ++bc_->shared_count;
@@ -200,18 +209,17 @@ class SharedPtr {  // TODO во всех конструкторах прибав
   template <typename U, Deleter<U> Del>
     requires(std::is_base_of_v<T, U> || std::is_same_v<T, U>)
   SharedPtr(U* ptr, Del del)
-      : ptr_(ptr), bc_(new my::regular_control_block<U, Del>(1, 0, del)) {}
+      : ptr_(ptr), bc_(new regular_control_block<U, Del>(1, 0, del)) {}
 
   template <typename U, Deleter<U> Del, typename Alloc>
     requires(std::is_base_of_v<T, U> || std::is_same_v<T, U>)
   SharedPtr(U* ptr, Del del, Alloc alloc) : ptr_(ptr) {
-    using bc_alloc =
-        typename std::allocator_traits<Alloc>::template rebind_alloc<
-            typename my::regular_control_block<U, Del, Alloc>>;
+    using bc_alloc = typename std::allocator_traits<
+        Alloc>::template rebind_alloc<regular_control_block<U, Del, Alloc>>;
     bc_alloc tmp_alloc(alloc);
 
     auto* new_bc_ptr = std::allocator_traits<bc_alloc>::allocate(tmp_alloc, 1);
-    new (new_bc_ptr) my::regular_control_block<T, Del, Alloc>(1, 0, del, alloc);
+    new (new_bc_ptr) regular_control_block<T, Del, Alloc>(1, 0, del, alloc);
     bc_ = new_bc_ptr;
   }
 
@@ -318,7 +326,7 @@ class SharedPtr {  // TODO во всех конструкторах прибав
 template <typename T, typename... Args, typename Alloc = std::allocator<T>>
 SharedPtr<T> allocateShared(Alloc& alloc, Args&&... args) {
   using CB_Alloc = typename std::allocator_traits<Alloc>::template rebind_alloc<
-      my::make_shared_control_block<T, Alloc>>;
+      make_shared_control_block<T, Alloc>>;
   CB_Alloc cb_alloc(alloc);
 
   auto* ptr = std::allocator_traits<CB_Alloc>::allocate(cb_alloc, 1);
@@ -336,9 +344,9 @@ SharedPtr<T> makeShared(Args&&... args) {
 
 template <typename T>
 class WeakPtr {
- public:  // TODO 0000
-  T* ptr_                     = nullptr;
-  my::base_control_block* bc_ = nullptr;
+ public:
+  T* ptr_                 = nullptr;
+  base_control_block* bc_ = nullptr;
 
  public:
   using value_type = T;
@@ -410,8 +418,7 @@ class WeakPtr {
     return *this;
   }
 
-  WeakPtr& operator=(WeakPtr&& other) & {  // TODO noexcept, but a need to
-                                           // dealloc and destroy??
+  WeakPtr& operator=(WeakPtr&& other) & noexcept {
     if (this != &other) {
       if (bc_) {
         bc_->destroy_weak();
@@ -433,17 +440,27 @@ class WeakPtr {
     return bc_ == nullptr || !bc_->shared_count;
   }
 
-  SharedPtr<T> lock() {
+  SharedPtr<T> lock() const {
     return expired() ? SharedPtr<T>() : SharedPtr<T>(ptr_, bc_);
   }
 
-  const SharedPtr<T> lock() const {
-    return expired() ? SharedPtr<T>() : SharedPtr<T>(ptr_, bc_);
-  }
+  bool operator==(const WeakPtr&) const = default;
 
   ~WeakPtr() {
     if (bc_) {
       bc_->destroy_weak();
     }
+  }
+};
+
+template <typename T>
+struct EnableSharedFromThis {
+  WeakPtr<T> wptr;
+
+  SharedPtr<T> shared_from_this() const {
+    if (wptr == WeakPtr<T>()) {
+      throw std::bad_weak_ptr();
+    }
+    return wptr.lock();
   }
 };
