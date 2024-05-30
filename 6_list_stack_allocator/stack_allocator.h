@@ -16,10 +16,6 @@ class StackStorage {
   bool operator==(const StackStorage& other) const {
     return arr = other.arr_;
   }
-
-  bool operator!=(const StackStorage& other) const {
-    return arr != other.arr;
-  }
 };
 
 template <typename T, size_t N>
@@ -38,10 +34,6 @@ class StackAllocator {
   StackAllocator(const StackAllocator<U, N>& other) : store_(other.store_) {}
 
   explicit StackAllocator(StackStorage<N>& store) : store_(store) {}
-
-  StackAllocator& operator=(const StackAllocator&) = delete;
-
-  ~StackAllocator() = default;
 
   [[nodiscard]] pointer allocate(size_t n_) const {
     if (std::align(alignof(T), sizeof(T) * n_, store_.current, store_.space))
