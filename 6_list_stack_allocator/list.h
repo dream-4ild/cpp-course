@@ -125,7 +125,6 @@ class List {
   base_node fake_node_;
   size_t sz_;
   [[no_unique_address]] default_alloc T_alloc_;
-  [[no_unique_address]] node_alloc node_alloc_;
 
   template <typename Allocator, typename... Args>
   void emplace_(const_iterator it, Allocator& alloc, Args&&... args) {
@@ -166,22 +165,26 @@ class List {
     }
   }
 
+  List(const List& other, Alloc alloc) : List(alloc) {
+    for (auto& elem : other) {
+      push_back(elem);
+    }
+  }
+
  public:
   List() : List(Alloc()) {}
 
   explicit List(const Alloc& alloc)
-      : fake_node_(&fake_node_, &fake_node_),
-        sz_(0),
-        T_alloc_(alloc),
-        node_alloc_(T_alloc_) {}
+      : fake_node_(&fake_node_, &fake_node_), sz_(0), T_alloc_(alloc) {}
 
   List(size_t n_) : List(n_, Alloc()) {}
 
   List(size_t n_, const T& value) : List(n_, value, Alloc()) {}
 
   List(size_t n_, const Alloc& alloc) : List(alloc) {
+    node_alloc nd_alloc(T_alloc_);
     while (sz_ < n_) {
-      emplace_(end(), node_alloc_);
+      emplace_(end(), nd_alloc);
     }
   }
 
@@ -193,18 +196,14 @@ class List {
 
   List(const List& other)
       : List(
+            other,
             std::allocator_traits<Alloc>::select_on_container_copy_construction(
-                other.get_allocator())) {
-    for (auto& elem : other) {
-      push_back(elem);
-    }
-  }
+                other.get_allocator())) {}
 
   List(List&& other) noexcept
       : fake_node_(other.fake_node_),
         sz_(other.sz_),
-        T_alloc_(std::move(other.T_alloc_)),
-        node_alloc_(std::move(T_alloc_)) {
+        T_alloc_(std::move(other.T_alloc_)) {
     other.fake_node_ = base_node(&other.fake_node_, &other.fake_node_);
 
     begin().get_base_node()->prev   = &fake_node_;
@@ -213,44 +212,28 @@ class List {
     other.sz_ = 0;
   }
 
+  void Swap(List& other) {
+    std::swap(fake_node_, other.fake_node_);
+
+    fake_node_.next->prev = &fake_node_;
+    fake_node_.prev->next = &fake_node_;
+
+    other.fake_node_.next->prev = &other.fake_node_;
+    other.fake_node_.prev->next = &other.fake_node_;
+
+    std::swap(sz_, other.sz_);
+    std::swap(T_alloc_, other.T_alloc_);
+  }
+
   List& operator=(const List& other) & {
-    auto new_alloc = std::allocator_traits<
-                         Alloc>::propagate_on_container_copy_assignment::value
-                         ? other.get_allocator()
-                         : T_alloc_;
-    auto new_node_alloc =
-        std::allocator_traits<
-            Alloc>::propagate_on_container_copy_assignment::value
-            ? typename std::allocator_traits<Alloc>::template rebind_alloc<
-                  node>(new_alloc)
-            : node_alloc_;
-
-    int old_sz = static_cast<int>(size());
-
-    auto it = other.cbegin();
-
-    size_t i = 0;
-    try {
-      for (; i < other.size(); ++i, ++it) {
-        emplace_(end(), new_node_alloc, *it);
-      }
-    } catch (...) {
-      for (; i > 0; --i) {
-        erase_(--end(), new_node_alloc);
-      }
-      throw;
+    if (this != &other) {
+      auto new_alloc = std::allocator_traits<
+                           Alloc>::propagate_on_container_copy_assignment::value
+                           ? other.get_allocator()
+                           : T_alloc_;
+      List another(other, new_alloc);
+      Swap(another);
     }
-
-    while (--old_sz != -1) {
-      erase_(begin(), new_node_alloc);
-    }
-
-    if constexpr (std::allocator_traits<
-                      Alloc>::propagate_on_container_copy_assignment::value) {
-      T_alloc_    = new_alloc;
-      node_alloc_ = new_node_alloc;
-    }
-
     return *this;
   }
 
@@ -272,8 +255,7 @@ class List {
 
       if constexpr (std::allocator_traits<
                         Alloc>::propagate_on_container_move_assignment::value) {
-        T_alloc_    = other.T_alloc_;
-        node_alloc_ = other.node_alloc_;
+        T_alloc_ = other.T_alloc_;
       }
 
     } else {
@@ -311,10 +293,12 @@ class List {
 
   template <typename... Args>
   void insert(const_iterator it, Args&&... args) {
+    node_alloc node_alloc_(T_alloc_);
     emplace_(it, node_alloc_, std::forward<Args>(args)...);
   }
 
   void erase(const_iterator it) noexcept(std::is_nothrow_destructible_v<T>) {
+    node_alloc node_alloc_(T_alloc_);
     erase_(it, node_alloc_);
   }
 
