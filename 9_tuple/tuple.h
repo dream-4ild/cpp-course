@@ -19,71 +19,22 @@ template <typename T>
 struct is_compiled_copy_list_initial_from_empty<T, std::void_t<decltype(T{})>>
     : std::true_type {};
 
-template <size_t N, typename Head, typename... Tail>
-struct Nth_type : Nth_type<N - 1, Tail...> {};
-
-template <typename Head, typename... Tail>
-struct Nth_type<0, Head, Tail...> {
-  using type = Head;
+template <typename T>
+struct bare_type {
+  using type = typename std::remove_cv_t<typename std::remove_reference_t<T>>;
 };
 
-template <size_t, typename...>
-struct Nth_type_in_tuple;
-
-template <size_t N, typename... Args>
-struct Nth_type_in_tuple<N, Tuple<Args...>> {
-  using type = Nth_type<N, Args...>::type;
-};
-
-template <size_t N, typename Tpl>
-using Nth_type_in_tuple_t = Nth_type_in_tuple<N, Tpl>::type;
-
-template <size_t n, typename... Args>
-struct nth_type_in_pack;
-
-template <size_t n, typename Head, typename... Tail>
-struct nth_type_in_pack<n, Head, Tail...> : nth_type_in_pack<n - 1, Tail...> {};
-
-template <typename Head, typename... Tail>
-struct nth_type_in_pack<0, Head, Tail...> : std::type_identity<Head> {};
+template <typename T>
+using bare_type_t = typename bare_type<T>::type;
 
 template <typename T>
 struct is_Tuple : std::false_type {};
 
-// Частичная специализация для основного типа Tuple
 template <typename... Args>
 struct is_Tuple<Tuple<Args...>> : std::true_type {};
 
-// Частичная специализация для const Tuple
-template <typename... Args>
-struct is_Tuple<const Tuple<Args...>> : std::true_type {};
-
-// Частичная специализация для Tuple&
-template <typename... Args>
-struct is_Tuple<Tuple<Args...>&> : std::true_type {};
-
-// Частичная специализация для const Tuple&
-template <typename... Args>
-struct is_Tuple<const Tuple<Args...>&> : std::true_type {};
-
-// Частичная специализация для Tuple&&
-template <typename... Args>
-struct is_Tuple<Tuple<Args...>&&> : std::true_type {};
-
-// Частичная специализация для const Tuple&&
-template <typename... Args>
-struct is_Tuple<const Tuple<Args...>&&> : std::true_type {};
-
 template <typename T>
-static constexpr bool is_Tuple_v = is_Tuple<T>::value;
-
-template <typename Tuple>
-struct tuple_types;
-
-template <typename... Args>
-struct tuple_types<Tuple<Args...>> {
-  using type = Tuple<Args...>;
-};
+static constexpr bool is_Tuple_v = is_Tuple<bare_type_t<T>>::value;
 
 template <typename...>
 struct concat_tuple_types;
@@ -99,16 +50,8 @@ struct concat_tuple_types<Tuple<Args...>> {
   using type = Tuple<Args...>;
 };
 
-template <typename T>
-struct bare_type {
-  // Удаляем ссылки и cv-квалификаторы
-  using type =
-      typename std::remove_cv<typename std::remove_reference<T>::type>::type;
-};
-
-// Вспомогательный тип для упрощения использования
-template <typename T>
-using bare_type_t = typename bare_type<T>::type;
+template <typename... Args>
+using concat_tuple_types_t = concat_tuple_types<Args...>::type;
 
 struct private_tuple_cat_tag {};
 
@@ -119,8 +62,6 @@ class Tuple<Head, Tail...> {
  public:
   Head head_;
   [[no_unique_address]] Tuple<Tail...> tail_;
-
-  using TL = Tuple<Tail...>;
 
   static constexpr bool is_default_constr =
       (std::is_default_constructible_v<Head> && ... &&
@@ -154,6 +95,7 @@ class Tuple<Head, Tail...> {
   static constexpr bool is_constructable_from =
       (std::is_constructible_v<Head, HHead> && ... &&
        std::is_constructible_v<Tail, TTail>);
+
   template <typename HHead, typename... TTail>
   static constexpr bool is_constructable_from_with_double_ref =
       (std::is_constructible_v<Head, HHead&&> && ... &&
@@ -174,8 +116,9 @@ class Tuple<Head, Tail...> {
       (std::is_assignable_v<Head&, HHead> && ... &&
        std::is_assignable_v<Tail&, TTail>);
 
+  // три конструктора для работы с tuple_cat
   template <typename HeadTuples, typename... TailTuples>
-    requires((sizeof...(Tail) > 0 && !std::is_same_v<HeadTuples, Tuple<>> &&
+    requires((!std::is_same_v<HeadTuples, Tuple<>> &&
               helper::is_Tuple_v<HeadTuples>) &&
              ... && helper::is_Tuple_v<TailTuples>)
   Tuple(helper::private_tuple_cat_tag, HeadTuples&& htpl, TailTuples&&... ttpls)
@@ -198,7 +141,7 @@ class Tuple<Head, Tail...> {
   friend class Tuple;
 
   template <size_t N, typename Tpl>
-    requires(helper::is_Tuple_v<std::remove_reference_t<Tpl>>)
+    requires(helper::is_Tuple_v<Tpl>)
   friend constexpr decltype(auto) get(Tpl&&);
 
   template <typename T, typename... Types>
@@ -247,20 +190,21 @@ class Tuple<Head, Tail...> {
 
   template <typename UHead, typename... UTail>
     requires(sizeof...(Tail) == sizeof...(UTail) &&
-             is_constructable_from<UHead&&, UTail&&...> &&
+             is_constructable_from<UHead &&, UTail && ...> &&
              (sizeof...(Tail) != 0 ||
               !(std::is_constructible_v<Head, Tuple<UHead> &&> ||
                 std::is_convertible_v<Tuple<UHead> &&, Head> ||
-                std::is_same_v<Head,
-                               UHead>)))  ///// лажа со спусками и выше тоже
+                std::is_same_v<Head, UHead>)))
   explicit(!is_convertable_from_back<UHead&&, UTail&&...>)
       Tuple(Tuple<UHead, UTail...>&& other)
-      : head_(std::forward<UHead>(other.head_)), tail_(std::move(other.tail_)) {}
+      : head_(std::forward<UHead>(other.head_)),
+        tail_(std::move(other.tail_)) {}
 
   Tuple(const Tuple& other)
     requires(is_copy_constr)
       : head_(other.head_), tail_(other.tail_) {}
 
+  // тут убрал requires(is_move_constr) потому что тот некорректный static_assert не проходил
   Tuple(Tuple&& other) noexcept
       : head_(std::move(other.head_)), tail_(std::move(other.tail_)) {}
 
@@ -308,7 +252,6 @@ class Tuple<Head, Tail...> {
   template <typename T, typename U>
   Tuple(std::pair<T, U>&& pr)
       : head_(std::move(pr.first)), tail_(std::move(pr.second)) {}
-
 };
 
 template <typename T, typename U>
@@ -350,7 +293,7 @@ template <class T, class U>
 }
 
 template <size_t N, typename Tpl>
-  requires(helper::is_Tuple_v<std::remove_reference_t<Tpl>>)
+  requires(helper::is_Tuple_v<Tpl>)
 constexpr decltype(auto) get(Tpl&& tuple) {
   if constexpr (N > 0) {
     return get<N - 1>(std::forward<Tpl>(tuple).tail_);
@@ -402,6 +345,6 @@ constexpr Tuple<Types...> makeTuple(Types&&... args) {
 
 template <typename... Tuples>
 constexpr decltype(auto) tupleCat(Tuples&&... tuples) {
-  using tpl = helper::concat_tuple_types<helper::bare_type_t<Tuples>...>::type;
+  using tpl = helper::concat_tuple_types_t<helper::bare_type_t<Tuples>...>;
   return tpl(helper::private_tuple_cat_tag(), std::forward<Tuples>(tuples)...);
 }
