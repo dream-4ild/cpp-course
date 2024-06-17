@@ -29,7 +29,7 @@ Move-semantics, обход итератором за O(колличество_э
 ### 8) Shared Ptr : 20.04.2024
 RAII, type erasure
 
-### 9) tuple
+### 9) tuple 17.06.2024
 auto, decltype, declval, SFINAE, requires, concepts, CTAD
 
 ### 10) Function
