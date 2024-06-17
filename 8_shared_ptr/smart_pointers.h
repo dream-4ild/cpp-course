@@ -9,7 +9,7 @@ concept Deleter = requires(Del del, T* ptr) {
 namespace {
 class base_control_block {
  private:
-  virtual void delete_block_if_need() = 0;
+  virtual bool delete_block_if_need() = 0;
 
  public:
   size_t shared_count;
@@ -37,7 +37,7 @@ class regular_control_block : public base_control_block {
   [[no_unique_address]] Del del;
   [[no_unique_address]] Alloc alloc;
 
-  void delete_block_if_need() final {
+  bool delete_block_if_need() final {
     if (!weak_count) {
       using block_alloc = typename std::allocator_traits<
           Alloc>::template rebind_alloc<regular_control_block>;
@@ -47,7 +47,9 @@ class regular_control_block : public base_control_block {
       alloc.~Alloc();
 
       std::allocator_traits<block_alloc>::deallocate(b_l, this, 1);
+      return true;
     }
+    return false;
   }
 
  public:
@@ -67,11 +69,15 @@ class regular_control_block : public base_control_block {
   regular_control_block& operator=(regular_control_block&&)      = default;
 
   void destroy_shared(void* ptr) final {
-    --shared_count;
-
-    if (!shared_count) {
+    if (shared_count == 1) {
       del(static_cast<U*>(ptr));
-      delete_block_if_need();
+
+      if (!delete_block_if_need()) {
+        --shared_count;
+      }
+
+    } else {
+      --shared_count;
     }
   }
 };
@@ -83,13 +89,14 @@ class make_shared_control_block : public base_control_block {
   [[no_unique_address]] Alloc alloc;
 
  private:
-  void delete_block_if_need() final {
+  bool delete_block_if_need() final {
     if (!weak_count && !shared_count) {
       using CB_alloc = std::allocator_traits<Alloc>::template rebind_alloc<
           make_shared_control_block>;
       CB_alloc cb_alloc;
       std::allocator_traits<CB_alloc>::deallocate(cb_alloc, this, 1);
     }
+    return true;
   }
 
  public:
@@ -164,7 +171,7 @@ class SharedPtr {
   explicit SharedPtr(U* ptr)
       : ptr_(ptr), bc_(new regular_control_block<U>(1, 0)) {
     if constexpr (std::is_base_of_v<EnableSharedFromThis<U>, U>) {
-      ptr->wptr = this;
+      ptr->wptr = SharedPtr<U>(*this);
     }
   }
 
