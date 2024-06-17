@@ -204,7 +204,8 @@ class Tuple<Head, Tail...> {
     requires(is_copy_constr)
       : head_(other.head_), tail_(other.tail_) {}
 
-  // тут убрал requires(is_move_constr) потому что тот некорректный static_assert не проходил
+  // тут убрал requires(is_move_constr) потому что тот некорректный
+  // static_assert не проходил
   Tuple(Tuple&& other) noexcept
       : head_(std::move(other.head_)), tail_(std::move(other.tail_)) {}
 
@@ -216,7 +217,7 @@ class Tuple<Head, Tail...> {
       tail_ = other.tail_;
     }
     return *this;
-  }  // TODO странно подчеркивает
+  }
 
   Tuple& operator=(Tuple&& other) noexcept
     requires(is_move_assign)
@@ -239,7 +240,7 @@ class Tuple<Head, Tail...> {
 
   template <typename... UTypes>
     requires(sizeof...(Tail) + 1 == sizeof...(UTypes) &&
-             is_assign_to_ref_from<UTypes && ...>)
+             is_assign_to_ref_from<UTypes...>)
   Tuple& operator=(Tuple<UTypes...>&& other) {
     head_ = std::forward<decltype(other.head_)>(other.head_);
     tail_ = std::move(other.tail_);
@@ -254,15 +255,9 @@ class Tuple<Head, Tail...> {
       : head_(std::move(pr.first)), tail_(std::move(pr.second)) {}
 };
 
-template <typename T, typename U>
-Tuple(const std::pair<T, U>&) -> Tuple<T, U>;
-
-template <typename T, typename U>
-Tuple(std::pair<T, U>&&) -> Tuple<T, U>;
-
 template <>
 class Tuple<> {
- private:
+ public:
   template <typename... Args>
   friend class Tuple;
 
@@ -274,6 +269,13 @@ class Tuple<> {
   constexpr Tuple& operator=(const Tuple&) = default;
   constexpr Tuple& operator=(Tuple&&)      = default;
 };
+
+// deductions guides
+template <typename T, typename U>
+Tuple(const std::pair<T, U>&) -> Tuple<T, U>;
+
+template <typename T, typename U>
+Tuple(std::pair<T, U>&&) -> Tuple<T, U>;
 
 // почему то нет в utility, хотя должно быть с 23 плюсов
 template <class T, class U>
