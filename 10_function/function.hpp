@@ -1,6 +1,7 @@
 //
 // Created by dmitry on 6/18/24.
 //
+#include <functional>
 
 template <bool, typename...>
 class Function_impl;
@@ -8,17 +9,14 @@ class Function_impl;
 template <bool isMoveOnly, typename Ret, typename... Args>
 class Function_impl<isMoveOnly, Ret(Args...)> {
  private:
-  using func_t        = Ret(Args...);
-  using invoke_ptr_t  = Ret (*)(void*, Args...);
-  using destroy_ptr_t = void (*)(void*);
-  using copy_ptr_t    = void (*)(void*&, void*);
-  using type_id_ptr_t = const std::type_info& (*)(void*);  // TODO не надо?
+  using invoke_ptr_t = Ret (*)(void*, Args...);
 
   static constexpr size_t BUFFER_SIZE_ = 16;
 
   template <typename Func>
   static constexpr bool is_large() {
-    return sizeof(Func) > BUFFER_SIZE_;
+    return sizeof(Func) > BUFFER_SIZE_ ||
+           !std::is_trivially_copy_constructible_v<Func>;
   }
 
   enum operation {
@@ -73,7 +71,7 @@ class Function_impl<isMoveOnly, Ret(Args...)> {
   }
 
  private:
-  alignas(max_align_t) char buffer_[BUFFER_SIZE_]{};
+  alignas(max_align_t) mutable char buffer_[BUFFER_SIZE_]{};
   void* ptr_{};  // можно объединить в одно поле?
   invoke_ptr_t invoke_ptr;
   manager_ptr manager_;
@@ -106,7 +104,7 @@ class Function_impl<isMoveOnly, Ret(Args...)> {
 
   constexpr Function_impl(const Function_impl& other)
       : ptr_(buffer_), invoke_ptr(other.invoke_ptr), manager_(other.manager_) {
-    *manager_(ptr_, other.ptr_, _copy_ptr);
+    manager_(ptr_, other.ptr_, _copy_ptr);
   }
 
   constexpr Function_impl(Function_impl&& other) noexcept
@@ -128,11 +126,11 @@ class Function_impl<isMoveOnly, Ret(Args...)> {
       if (ptr_) {
         void* cnt_ptr = nullptr;
         manager_(cnt_ptr, ptr_, _destroy_ptr);
-        // without delete for economy new
       } else {
-        ptr_     = buffer_;
-        manager_ = other.manager_;
+        ptr_ = buffer_;
       }
+
+      manager_   = other.manager_;
       invoke_ptr = other.invoke_ptr;
       manager_(ptr_, other.ptr_, _copy_ptr);
     }
@@ -213,6 +211,14 @@ class Function_impl<isMoveOnly, Ret(Args...)> {
   T* target() {
     if (target_type() == typeid(T)) {
       return reinterpret_cast<T*>(ptr_);
+    }
+    return nullptr;
+  }
+
+  template <typename T>
+  const T* target() const {
+    if (target_type() == typeid(T)) {
+      return reinterpret_cast<const T*>(ptr_);
     }
     return nullptr;
   }
